@@ -395,6 +395,41 @@ def search_google(query: str) -> list[dict]:
     return results
 
 
+# Configurazione Google API (impostata da main)
+google_api_key = ""
+google_api_cx = ""
+
+
+def search_google_api(query: str) -> list[dict]:
+    """Cerca su Google tramite Custom Search JSON API (niente 429)."""
+    if not google_api_key or not google_api_cx:
+        return [{"error": "Google API: chiave API o CX non configurati"}]
+
+    encoded = urllib.parse.quote_plus(query)
+    url = (f"https://www.googleapis.com/customsearch/v1"
+           f"?key={google_api_key}&cx={google_api_cx}&q={encoded}&num=10")
+
+    req = urllib.request.Request(url, headers={"User-Agent": get_random_ua()})
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        rate_limiter.success()
+    except Exception as e:
+        rate_limiter.failure()
+        return [{"error": f"Google API: {e}"}]
+
+    results = []
+    for item in data.get("items", []):
+        results.append({
+            "title": item.get("title", ""),
+            "url": item.get("link", ""),
+            "snippet": item.get("snippet", ""),
+            "engine": "Google API",
+        })
+
+    return results
+
+
 def search_bing(query: str) -> list[dict]:
     """Cerca su Bing."""
     encoded = urllib.parse.quote_plus(query)
@@ -1140,6 +1175,8 @@ Esempi:
     parser.add_argument("--email-from", default="", help="Email mittente")
     parser.add_argument("--email-pass", default="", help="Password email")
     parser.add_argument("--email-to", default="", help="Email destinatario")
+    parser.add_argument("--google-api-key", default="", help="Google Custom Search API key")
+    parser.add_argument("--google-cx", default="", help="Google Custom Search Engine ID (cx)")
     parser.add_argument("--lookup", help="Cerca un singolo numero nella rubrica e online")
     parser.add_argument("--interactive", action="store_true", help="Modalita interattiva: inserisci numeri manualmente")
 
@@ -1150,9 +1187,19 @@ Esempi:
         sys.exit(1)
 
     # Setup globale
-    global proxy_manager, rate_limiter
+    global proxy_manager, rate_limiter, google_api_key, google_api_cx
     proxy_manager = ProxyManager(args.proxy_file)
     rate_limiter = AdaptiveRateLimiter(args.delay)
+
+    # Google API: se configurata, sostituisce lo scraping Google
+    if args.google_api_key and args.google_cx:
+        google_api_key = args.google_api_key
+        google_api_cx = args.google_cx
+        SEARCH_ENGINES["google"] = search_google_api
+        print("[OK] Google Custom Search API configurata (niente limiti 429)", flush=True)
+    else:
+        print("[i] Google API non configurata, uso scraping (rischio 429)", flush=True)
+        print("    Usa --google-api-key e --google-cx per abilitare le API", flush=True)
 
     # Forza output non bufferizzato (importante per GUI)
     sys.stdout.reconfigure(line_buffering=True) if hasattr(sys.stdout, 'reconfigure') else None

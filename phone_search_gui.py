@@ -78,6 +78,20 @@ class PhoneSearchGUI:
         tk.Entry(row2, textvariable=self.engines_var, font=("Segoe UI", 9),
                  width=40).pack(side="left", padx=5)
 
+        # Google API
+        row_api = tk.Frame(opts_frame, bg="#f5f6fa")
+        row_api.pack(fill="x", pady=3)
+
+        tk.Label(row_api, text="Google API Key:", bg="#f5f6fa", font=("Segoe UI", 9)).pack(side="left")
+        self.gapi_key_var = tk.StringVar(value="")
+        tk.Entry(row_api, textvariable=self.gapi_key_var, font=("Segoe UI", 9),
+                 width=30, show="*").pack(side="left", padx=(5, 15))
+
+        tk.Label(row_api, text="CX:", bg="#f5f6fa", font=("Segoe UI", 9)).pack(side="left")
+        self.gapi_cx_var = tk.StringVar(value="")
+        tk.Entry(row_api, textvariable=self.gapi_cx_var, font=("Segoe UI", 9),
+                 width=25).pack(side="left", padx=5)
+
         row3 = tk.Frame(opts_frame, bg="#f5f6fa")
         row3.pack(fill="x", pady=3)
 
@@ -183,6 +197,11 @@ class PhoneSearchGUI:
         cmd_parts += ["--workers", self.workers_var.get()]
         cmd_parts += ["--delay", self.delay_var.get()]
         cmd_parts += ["--engines", self.engines_var.get()]
+
+        gapi_key = self.gapi_key_var.get().strip()
+        gapi_cx = self.gapi_cx_var.get().strip()
+        if gapi_key and gapi_cx:
+            cmd_parts += ["--google-api-key", gapi_key, "--google-cx", gapi_cx]
 
         limit = self.limit_var.get()
         if limit and limit != "0":
