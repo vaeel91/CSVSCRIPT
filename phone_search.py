@@ -674,7 +674,7 @@ def print_report(search_results: list[SearchResult]):
             not_found_count += 1
 
         cached_tag = " [CACHE]" if sr.from_cache else ""
-        print(f"\n{'─' * 70}")
+        print(f"\n{'-' * 70}")
         print(f"  {sr.contact.name} | {sr.contact.phone}{cached_tag}")
         print(f"  Stato: {status}")
 
@@ -898,7 +898,7 @@ def build_notification_summary(search_results: list[SearchResult]) -> str:
     found = sum(1 for sr in search_results if any("error" not in r for r in sr.results))
     total = len(search_results)
     lines = [
-        f"📱 Phone Search completato!",
+        f"[*] Phone Search completato!",
         f"Analizzati: {total} numeri",
         f"Trovati online: {found}",
         f"Puliti: {total - found}",
@@ -907,7 +907,7 @@ def build_notification_summary(search_results: list[SearchResult]) -> str:
     for sr in search_results:
         valid = [r for r in sr.results if "error" not in r]
         if valid:
-            lines.append(f"⚠️ {sr.contact.name} ({sr.contact.phone}): {len(valid)} risultati")
+            lines.append(f"[!] {sr.contact.name} ({sr.contact.phone}): {len(valid)} risultati")
     return "\n".join(lines)
 
 
@@ -961,15 +961,15 @@ def compare_with_history(monitor_file: str, search_results: list[SearchResult]) 
 
         new_urls = current_urls - prev_urls
         if new_urls:
-            changes.append(f"🆕 {sr.contact.name} ({sr.contact.phone}): {len(new_urls)} NUOVI risultati")
+            changes.append(f"[NEW] {sr.contact.name} ({sr.contact.phone}): {len(new_urls)} NUOVI risultati")
             for u in list(new_urls)[:3]:
-                changes.append(f"    → {u}")
+                changes.append(f"    -> {u}")
 
         if not prev and valid:
-            changes.append(f"⚠️ {sr.contact.name} ({sr.contact.phone}): appare online per la PRIMA VOLTA ({len(valid)} risultati)")
+            changes.append(f"[!] {sr.contact.name} ({sr.contact.phone}): appare online per la PRIMA VOLTA ({len(valid)} risultati)")
 
     if not changes:
-        changes.append("✅ Nessun cambiamento rispetto alla scansione precedente.")
+        changes.append("[OK] Nessun cambiamento rispetto alla scansione precedente.")
 
     return changes
 
@@ -989,7 +989,7 @@ def lookup_single_number(phone_input: str, contacts: list[Contact], cache: Searc
     print(f"{'=' * 70}")
 
     # 1. Confronto con rubrica
-    print(f"\n📒 Confronto con rubrica ({len(contacts)} contatti)...")
+    print(f"\n[>] Confronto con rubrica ({len(contacts)} contatti)...")
     found_in_contacts = []
     for c in contacts:
         c_no_prefix = strip_prefix(c.phone)
@@ -998,14 +998,14 @@ def lookup_single_number(phone_input: str, contacts: list[Contact], cache: Searc
             found_in_contacts.append(c)
 
     if found_in_contacts:
-        print(f"\n  ✅ TROVATO IN RUBRICA ({len(found_in_contacts)} corrispondenze):")
+        print(f"\n  [OK] TROVATO IN RUBRICA ({len(found_in_contacts)} corrispondenze):")
         for c in found_in_contacts:
-            print(f"     → {c.name} ({c.phone})")
+            print(f"     -> {c.name} ({c.phone})")
     else:
-        print(f"\n  ❌ NON presente in rubrica")
+        print(f"\n  [X] NON presente in rubrica")
 
     # 2. Ricerca online
-    print(f"\n🔍 Ricerca online in corso...")
+    print(f"\n[?] Ricerca online in corso...")
     results = search_phone_number(phone, cache=cache, engines=engines)
     valid = [r for r in results if "error" not in r]
     errors = [r for r in results if "error" in r]
@@ -1017,7 +1017,7 @@ def lookup_single_number(phone_input: str, contacts: list[Contact], cache: Searc
             cats[cat] = cats.get(cat, 0) + 1
         cat_str = ", ".join(f"{CATEGORIES.get(c, {}).get('label', c)}:{n}" for c, n in cats.items())
 
-        print(f"\n  ⚠️  TROVATO ONLINE: {len(valid)} risultati [{cat_str}]")
+        print(f"\n  [!]  TROVATO ONLINE: {len(valid)} risultati [{cat_str}]")
         for i, r in enumerate(valid[:10], 1):
             cat_label = CATEGORIES.get(r.get("category", ""), {}).get("label", "Altro")
             engine = r.get("engine", "?")
@@ -1026,10 +1026,10 @@ def lookup_single_number(phone_input: str, contacts: list[Contact], cache: Searc
             if r.get("snippet"):
                 print(f"        {r['snippet'][:150]}")
     else:
-        print(f"\n  ✅ NON trovato online")
+        print(f"\n  [OK] NON trovato online")
 
     if errors:
-        print(f"\n  ⚠️  {len(errors)} motori hanno restituito errori")
+        print(f"\n  [!]  {len(errors)} motori hanno restituito errori")
 
     # Riepilogo
     print(f"\n{'=' * 70}")
@@ -1047,7 +1047,7 @@ def lookup_single_number(phone_input: str, contacts: list[Contact], cache: Searc
 def interactive_lookup(contacts: list[Contact], cache: SearchCache = None,
                        engines: list[str] = None):
     """Modalita interattiva: inserisci numeri uno alla volta."""
-    print("\n📱 MODALITA RICERCA SINGOLO NUMERO")
+    print("\n[#] MODALITA RICERCA SINGOLO NUMERO")
     print("   Inserisci un numero di telefono per cercarlo nella rubrica e online.")
     print("   Digita 'q' o 'esci' per uscire.\n")
 
@@ -1129,7 +1129,7 @@ Esempi:
     cache = None if args.no_cache else SearchCache(max_age_hours=args.cache_hours)
 
     # Carica contatti
-    print(f"📂 Caricamento rubrica da: {args.file}")
+    print(f"[>] Caricamento rubrica da: {args.file}")
     contacts = load_contacts(args.file)
     if not contacts:
         print("Nessun contatto trovato nel file.", file=sys.stderr)
@@ -1143,7 +1143,7 @@ Esempi:
             seen.add(c.phone)
             unique.append(c)
     contacts = unique
-    print(f"📱 Trovati {len(contacts)} numeri unici.")
+    print(f"[#] Trovati {len(contacts)} numeri unici.")
 
     # Engines
     active_engines = [e.strip() for e in args.engines.split(",")]
@@ -1164,7 +1164,7 @@ Esempi:
 
     if args.limit > 0:
         contacts = contacts[:args.limit]
-        print(f"📊 Limitato a {len(contacts)} contatti.")
+        print(f"[i] Limitato a {len(contacts)} contatti.")
 
     # Resume
     progress_file = PROGRESS_FILE
@@ -1172,11 +1172,11 @@ Esempi:
     if args.resume:
         completed_progress = load_progress(progress_file, args.file)
         if completed_progress:
-            print(f"🔄 Ripresa: trovati {len(completed_progress)} numeri gia analizzati.")
+            print(f"[~] Ripresa: trovati {len(completed_progress)} numeri gia analizzati.")
 
     # Engines
     active_engines = [e.strip() for e in args.engines.split(",")]
-    print(f"🔍 Motori attivi: {', '.join(active_engines)} + Tellows, Chi-mi-chiama, PagineBianche")
+    print(f"[?] Motori attivi: {', '.join(active_engines)} + Tellows, Chi-mi-chiama, PagineBianche")
 
     # Ricerca in parallelo
     search_results: list[SearchResult] = [None] * len(contacts)
@@ -1245,7 +1245,7 @@ Esempi:
                 print(f"\n  [{completed_count[0]}/{total}] {contact.name} ({contact.phone}): ERRORE - {e}", flush=True)
 
     workers = min(args.workers, total)
-    print(f"\n🚀 Ricerca in corso con {workers} thread paralleli...\n")
+    print(f"\n[>>] Ricerca in corso con {workers} thread paralleli...\n")
 
     with ThreadPoolExecutor(max_workers=workers) as executor:
         futures = {executor.submit(search_contact, i, c): c for i, c in enumerate(contacts)}
@@ -1265,7 +1265,7 @@ Esempi:
     # Monitoraggio
     if args.monitor:
         changes = compare_with_history(MONITOR_FILE, search_results)
-        print("\n📊 MONITORAGGIO - Confronto con scansione precedente:")
+        print("\n[i] MONITORAGGIO - Confronto con scansione precedente:")
         for change in changes:
             print(f"  {change}")
         save_history(MONITOR_FILE, search_results)
@@ -1290,7 +1290,7 @@ Esempi:
     if cache:
         cache.close()
 
-    print("\n✅ Scansione completata!")
+    print("\n[OK] Scansione completata!")
 
 
 if __name__ == "__main__":

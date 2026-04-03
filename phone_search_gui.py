@@ -211,10 +211,10 @@ class PhoneSearchGUI:
 
             process.wait()
             self.root.after(0, lambda: self.status_label.configure(text="Completato!"))
-            self.root.after(0, lambda: self._log("\n✅ Scansione completata!"))
+            self.root.after(0, lambda: self._log("\n[OK] Scansione completata!"))
 
         except Exception as e:
-            self.root.after(0, lambda: self._log(f"\n❌ Errore: {e}"))
+            self.root.after(0, lambda: self._log(f"\n[ERRORE] {e}"))
             self.root.after(0, lambda: self.status_label.configure(text=f"Errore: {e}"))
 
         self.root.after(0, lambda: self.start_btn.configure(state="normal"))
