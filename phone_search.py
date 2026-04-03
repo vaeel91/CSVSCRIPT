@@ -975,6 +975,96 @@ def compare_with_history(monitor_file: str, search_results: list[SearchResult]) 
 
 
 # ---------------------------------------------------------------------------
+# Lookup singolo numero
+# ---------------------------------------------------------------------------
+
+def lookup_single_number(phone_input: str, contacts: list[Contact], cache: SearchCache = None,
+                         engines: list[str] = None):
+    """Cerca un singolo numero nella rubrica e online."""
+    phone = normalize_phone(phone_input)
+    phone_no_prefix = strip_prefix(phone)
+
+    print(f"\n{'=' * 70}")
+    print(f"  RICERCA NUMERO: {phone}")
+    print(f"{'=' * 70}")
+
+    # 1. Confronto con rubrica
+    print(f"\n📒 Confronto con rubrica ({len(contacts)} contatti)...")
+    found_in_contacts = []
+    for c in contacts:
+        c_no_prefix = strip_prefix(c.phone)
+        if (c.phone == phone or c_no_prefix == phone_no_prefix
+                or c.phone == phone_no_prefix or c_no_prefix == phone):
+            found_in_contacts.append(c)
+
+    if found_in_contacts:
+        print(f"\n  ✅ TROVATO IN RUBRICA ({len(found_in_contacts)} corrispondenze):")
+        for c in found_in_contacts:
+            print(f"     → {c.name} ({c.phone})")
+    else:
+        print(f"\n  ❌ NON presente in rubrica")
+
+    # 2. Ricerca online
+    print(f"\n🔍 Ricerca online in corso...")
+    results = search_phone_number(phone, cache=cache, engines=engines)
+    valid = [r for r in results if "error" not in r]
+    errors = [r for r in results if "error" in r]
+
+    if valid:
+        cats = {}
+        for r in valid:
+            cat = r.get("category", "altro")
+            cats[cat] = cats.get(cat, 0) + 1
+        cat_str = ", ".join(f"{CATEGORIES.get(c, {}).get('label', c)}:{n}" for c, n in cats.items())
+
+        print(f"\n  ⚠️  TROVATO ONLINE: {len(valid)} risultati [{cat_str}]")
+        for i, r in enumerate(valid[:10], 1):
+            cat_label = CATEGORIES.get(r.get("category", ""), {}).get("label", "Altro")
+            engine = r.get("engine", "?")
+            print(f"\n    [{i}] [{engine}] [{cat_label}] {r.get('title', 'N/A')}")
+            print(f"        URL: {r.get('url', 'N/A')}")
+            if r.get("snippet"):
+                print(f"        {r['snippet'][:150]}")
+    else:
+        print(f"\n  ✅ NON trovato online")
+
+    if errors:
+        print(f"\n  ⚠️  {len(errors)} motori hanno restituito errori")
+
+    # Riepilogo
+    print(f"\n{'=' * 70}")
+    print(f"  RIEPILOGO per {phone}:")
+    print(f"    In rubrica:  {'SI' if found_in_contacts else 'NO'}", end="")
+    if found_in_contacts:
+        print(f" ({', '.join(c.name for c in found_in_contacts)})", end="")
+    print()
+    print(f"    Online:      {'SI' if valid else 'NO'} ({len(valid)} risultati)")
+    print(f"{'=' * 70}\n")
+
+    return found_in_contacts, valid
+
+
+def interactive_lookup(contacts: list[Contact], cache: SearchCache = None,
+                       engines: list[str] = None):
+    """Modalita interattiva: inserisci numeri uno alla volta."""
+    print("\n📱 MODALITA RICERCA SINGOLO NUMERO")
+    print("   Inserisci un numero di telefono per cercarlo nella rubrica e online.")
+    print("   Digita 'q' o 'esci' per uscire.\n")
+
+    while True:
+        try:
+            phone_input = input("  Numero da cercare: ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print("\n")
+            break
+
+        if not phone_input or phone_input.lower() in ("q", "esci", "exit", "quit"):
+            break
+
+        lookup_single_number(phone_input, contacts, cache=cache, engines=engines)
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -997,6 +1087,8 @@ Esempi:
   python phone_search.py rubrica.csv --monitor
   python phone_search.py rubrica.csv --proxy-file proxies.txt
   python phone_search.py rubrica.csv --telegram-token BOT:TOKEN --telegram-chat 12345
+  python phone_search.py rubrica.csv --lookup +393331234567
+  python phone_search.py rubrica.csv --interactive
         """,
     )
     parser.add_argument("file", help="File rubrica (CSV o VCF)")
@@ -1019,6 +1111,8 @@ Esempi:
     parser.add_argument("--email-from", default="", help="Email mittente")
     parser.add_argument("--email-pass", default="", help="Password email")
     parser.add_argument("--email-to", default="", help="Email destinatario")
+    parser.add_argument("--lookup", help="Cerca un singolo numero nella rubrica e online")
+    parser.add_argument("--interactive", action="store_true", help="Modalita interattiva: inserisci numeri manualmente")
 
     args = parser.parse_args()
 
@@ -1050,6 +1144,23 @@ Esempi:
             unique.append(c)
     contacts = unique
     print(f"📱 Trovati {len(contacts)} numeri unici.")
+
+    # Engines
+    active_engines = [e.strip() for e in args.engines.split(",")]
+
+    # Modalita lookup singolo numero
+    if args.lookup:
+        lookup_single_number(args.lookup, contacts, cache=cache, engines=active_engines)
+        if cache:
+            cache.close()
+        return
+
+    # Modalita interattiva
+    if args.interactive:
+        interactive_lookup(contacts, cache=cache, engines=active_engines)
+        if cache:
+            cache.close()
+        return
 
     if args.limit > 0:
         contacts = contacts[:args.limit]
