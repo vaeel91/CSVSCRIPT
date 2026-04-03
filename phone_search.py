@@ -98,10 +98,10 @@ proxy_manager = ProxyManager()
 # ---------------------------------------------------------------------------
 
 class AdaptiveRateLimiter:
-    def __init__(self, base_delay: float = 2.0):
+    def __init__(self, base_delay: float = 3.0):
         self.base_delay = base_delay
         self.current_delay = base_delay
-        self.min_delay = 0.5
+        self.min_delay = 1.5
         self.max_delay = 30.0
         self.lock = Lock()
         self.consecutive_ok = 0
@@ -604,8 +604,9 @@ def search_phone_number(phone: str, cache: SearchCache = None, engines: list[str
             r["category"] = categorize_result(r)
             unique.append(r)
 
-    # Salva in cache
-    if cache:
+    # Salva in cache solo se ci sono risultati validi (non cacheficare errori)
+    valid_results = [r for r in unique if "error" not in r]
+    if cache and valid_results:
         cache.set(phone, unique)
 
     return unique
@@ -1101,11 +1102,12 @@ Esempi:
     parser.add_argument("--found", "-f", default="numeri_trovati.txt", help="File TXT numeri trovati (default: numeri_trovati.txt)")
     parser.add_argument("--delay", "-d", type=float, default=2.0, help="Delay base tra ricerche in secondi (default: 2)")
     parser.add_argument("--limit", "-l", type=int, default=0, help="Max contatti da cercare (0=tutti)")
-    parser.add_argument("--workers", "-w", type=int, default=5, help="Thread paralleli (default: 5)")
+    parser.add_argument("--workers", "-w", type=int, default=3, help="Thread paralleli (default: 3)")
     parser.add_argument("--engines", default="google,bing,duckduckgo", help="Motori da usare separati da virgola (default: google,bing,duckduckgo)")
     parser.add_argument("--proxy-file", default="", help="File con lista proxy (uno per riga, formato http://ip:port)")
     parser.add_argument("--resume", action="store_true", help="Riprendi scansione interrotta")
     parser.add_argument("--no-cache", action="store_true", help="Ignora la cache")
+    parser.add_argument("--clear-cache", action="store_true", help="Cancella la cache e ricomincia da zero")
     parser.add_argument("--cache-hours", type=int, default=168, help="Ore validita cache (default: 168 = 7 giorni)")
     parser.add_argument("--monitor", action="store_true", help="Confronta con scansione precedente")
     parser.add_argument("--telegram-token", default="", help="Bot token Telegram per notifiche")
@@ -1133,6 +1135,9 @@ Esempi:
     sys.stdout.reconfigure(line_buffering=True) if hasattr(sys.stdout, 'reconfigure') else None
 
     # Cache
+    if args.clear_cache and os.path.isfile("phone_search_cache.db"):
+        os.remove("phone_search_cache.db")
+        print("[OK] Cache cancellata.", flush=True)
     cache = None if args.no_cache else SearchCache(max_age_hours=args.cache_hours)
 
     # Carica contatti
@@ -1192,6 +1197,9 @@ Esempi:
     completed_count = [0]
 
     def search_contact(index: int, contact: Contact) -> None:
+        # Stagger: ritarda l'avvio di ogni thread per non bombardare i motori
+        time.sleep(index * 1.5)
+
         # Skip se gia fatto (resume)
         if contact.phone in completed_progress:
             prev = completed_progress[contact.phone]

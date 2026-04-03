@@ -97,6 +97,10 @@ class PhoneSearchGUI:
         tk.Checkbutton(row3, text="Report HTML", variable=self.html_var,
                        bg="#f5f6fa", font=("Segoe UI", 9)).pack(side="left", padx=15)
 
+        self.clearcache_var = tk.BooleanVar(value=False)
+        tk.Checkbutton(row3, text="Pulisci cache", variable=self.clearcache_var,
+                       bg="#f5f6fa", font=("Segoe UI", 9)).pack(side="left")
+
         # Buttons
         btn_frame = tk.Frame(main, bg="#f5f6fa")
         btn_frame.pack(fill="x", pady=(0, 10))
@@ -190,6 +194,8 @@ class PhoneSearchGUI:
             cmd_parts.append("--monitor")
         if self.nocache_var.get():
             cmd_parts.append("--no-cache")
+        if self.clearcache_var.get():
+            cmd_parts.append("--clear-cache")
         if self.html_var.get():
             html_name = os.path.splitext(os.path.basename(filepath))[0] + "_report.html"
             cmd_parts += ["--html", html_name]
