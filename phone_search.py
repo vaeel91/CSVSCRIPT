@@ -1125,11 +1125,14 @@ Esempi:
     proxy_manager = ProxyManager(args.proxy_file)
     rate_limiter = AdaptiveRateLimiter(args.delay)
 
+    # Forza output non bufferizzato (importante per GUI)
+    sys.stdout.reconfigure(line_buffering=True) if hasattr(sys.stdout, 'reconfigure') else None
+
     # Cache
     cache = None if args.no_cache else SearchCache(max_age_hours=args.cache_hours)
 
     # Carica contatti
-    print(f"[>] Caricamento rubrica da: {args.file}")
+    print(f"[>] Caricamento rubrica da: {args.file}", flush=True)
     contacts = load_contacts(args.file)
     if not contacts:
         print("Nessun contatto trovato nel file.", file=sys.stderr)
@@ -1143,7 +1146,7 @@ Esempi:
             seen.add(c.phone)
             unique.append(c)
     contacts = unique
-    print(f"[#] Trovati {len(contacts)} numeri unici.")
+    print(f"[#] Trovati {len(contacts)} numeri unici.", flush=True)
 
     # Engines
     active_engines = [e.strip() for e in args.engines.split(",")]
@@ -1176,7 +1179,7 @@ Esempi:
 
     # Engines
     active_engines = [e.strip() for e in args.engines.split(",")]
-    print(f"[?] Motori attivi: {', '.join(active_engines)} + Tellows, Chi-mi-chiama, PagineBianche")
+    print(f"[?] Motori attivi: {', '.join(active_engines)} + Tellows, Chi-mi-chiama, PagineBianche", flush=True)
 
     # Ricerca in parallelo
     search_results: list[SearchResult] = [None] * len(contacts)
@@ -1245,7 +1248,7 @@ Esempi:
                 print(f"\n  [{completed_count[0]}/{total}] {contact.name} ({contact.phone}): ERRORE - {e}", flush=True)
 
     workers = min(args.workers, total)
-    print(f"\n[>>] Ricerca in corso con {workers} thread paralleli...\n")
+    print(f"\n[>>] Ricerca in corso con {workers} thread paralleli...\n", flush=True)
 
     with ThreadPoolExecutor(max_workers=workers) as executor:
         futures = {executor.submit(search_contact, i, c): c for i, c in enumerate(contacts)}

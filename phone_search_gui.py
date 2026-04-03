@@ -198,10 +198,14 @@ class PhoneSearchGUI:
         self.root.after(0, lambda: self.status_label.configure(text="Scansione in corso..."))
 
         import subprocess
+        env = os.environ.copy()
+        env["PYTHONUNBUFFERED"] = "1"
         try:
             process = subprocess.Popen(
                 cmd_parts, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                text=True, bufsize=1, cwd=os.path.dirname(os.path.abspath(__file__)),
+                text=True, bufsize=1, encoding="utf-8", errors="replace",
+                cwd=os.path.dirname(os.path.abspath(__file__)),
+                env=env,
             )
             for line in process.stdout:
                 if not self.is_running:
