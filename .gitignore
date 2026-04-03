@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+phone_search_cache.db
+phone_search_progress.json
+phone_search_history.json
