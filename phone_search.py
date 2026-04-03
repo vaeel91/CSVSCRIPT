@@ -531,10 +531,10 @@ def search_paginebianche(phone_no_prefix: str) -> list[dict]:
 
 
 SEARCH_ENGINES = {
-    "google": search_google,
     "bing": search_bing,
-    "yandex": search_yandex,
     "duckduckgo": search_duckduckgo,
+    "google": search_google,
+    "yandex": search_yandex,
 }
 
 SPECIFIC_SITES = {
@@ -542,6 +542,10 @@ SPECIFIC_SITES = {
     "chimicchiama": search_chimicchiama,
     "paginebianche": search_paginebianche,
 }
+
+# Motori bloccati durante la sessione (es. dopo 429)
+blocked_engines: set[str] = set()
+blocked_engines_lock = Lock()
 
 
 # ---------------------------------------------------------------------------
@@ -571,21 +575,36 @@ def search_phone_number(phone: str, cache: SearchCache = None, engines: list[str
 
     # Assegna una query diversa a ciascun motore (round-robin)
     for i, eng_name in enumerate(active_engines):
-        if eng_name in SEARCH_ENGINES:
-            query = queries[i % len(queries)]
-            print(f"        [{phone_no_prefix}] -> {eng_name}: {query}", flush=True)
-            results = SEARCH_ENGINES[eng_name](query)
-            valid_count = len([r for r in results if "error" not in r])
-            errs = [r for r in results if "error" in r]
-            if errs:
-                for e in errs:
-                    print(f"        [{phone_no_prefix}] <- {eng_name}: ERRORE -> {e['error']}", flush=True)
-            else:
-                print(f"        [{phone_no_prefix}] <- {eng_name}: {valid_count} risultati OK", flush=True)
-            for r in results:
-                r["query"] = query
-            all_results.extend(results)
-            rate_limiter.wait()
+        if eng_name not in SEARCH_ENGINES:
+            continue
+
+        # Salta motori bloccati (429)
+        with blocked_engines_lock:
+            if eng_name in blocked_engines:
+                print(f"        [{phone_no_prefix}] -- {eng_name}: SKIPPATO (bloccato 429)", flush=True)
+                continue
+
+        query = queries[i % len(queries)]
+        print(f"        [{phone_no_prefix}] -> {eng_name}: {query}", flush=True)
+        results = SEARCH_ENGINES[eng_name](query)
+        valid_count = len([r for r in results if "error" not in r])
+        errs = [r for r in results if "error" in r]
+        if errs:
+            for e in errs:
+                err_msg = e['error']
+                print(f"        [{phone_no_prefix}] <- {eng_name}: ERRORE -> {err_msg}", flush=True)
+                # Se 429, blocca questo motore per il resto della sessione
+                if "429" in str(err_msg):
+                    with blocked_engines_lock:
+                        if eng_name not in blocked_engines:
+                            blocked_engines.add(eng_name)
+                            print(f"        [!!] {eng_name} DISABILITATO per questa sessione (429 Too Many Requests)", flush=True)
+        else:
+            print(f"        [{phone_no_prefix}] <- {eng_name}: {valid_count} risultati OK", flush=True)
+        for r in results:
+            r["query"] = query
+        all_results.extend(results)
+        rate_limiter.wait()
 
     # Cerca sui siti specifici (veloci, una richiesta ciascuno)
     for site_name, site_func in SPECIFIC_SITES.items():
@@ -1107,7 +1126,7 @@ Esempi:
     parser.add_argument("--delay", "-d", type=float, default=2.0, help="Delay base tra ricerche in secondi (default: 2)")
     parser.add_argument("--limit", "-l", type=int, default=0, help="Max contatti da cercare (0=tutti)")
     parser.add_argument("--workers", "-w", type=int, default=3, help="Thread paralleli (default: 3)")
-    parser.add_argument("--engines", default="google,bing,duckduckgo", help="Motori da usare separati da virgola (default: google,bing,duckduckgo)")
+    parser.add_argument("--engines", default="bing,duckduckgo,google", help="Motori da usare separati da virgola (default: bing,duckduckgo,google)")
     parser.add_argument("--proxy-file", default="", help="File con lista proxy (uno per riga, formato http://ip:port)")
     parser.add_argument("--resume", action="store_true", help="Riprendi scansione interrotta")
     parser.add_argument("--no-cache", action="store_true", help="Ignora la cache")

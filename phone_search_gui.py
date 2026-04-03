@@ -74,7 +74,7 @@ class PhoneSearchGUI:
         row2.pack(fill="x", pady=3)
 
         tk.Label(row2, text="Motori:", bg="#f5f6fa", font=("Segoe UI", 9)).pack(side="left")
-        self.engines_var = tk.StringVar(value="google,bing,duckduckgo")
+        self.engines_var = tk.StringVar(value="bing,duckduckgo,google")
         tk.Entry(row2, textvariable=self.engines_var, font=("Segoe UI", 9),
                  width=40).pack(side="left", padx=5)
 
