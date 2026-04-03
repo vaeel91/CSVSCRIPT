@@ -576,8 +576,12 @@ def search_phone_number(phone: str, cache: SearchCache = None, engines: list[str
             print(f"        [{phone_no_prefix}] -> {eng_name}: {query}", flush=True)
             results = SEARCH_ENGINES[eng_name](query)
             valid_count = len([r for r in results if "error" not in r])
-            err_count = len([r for r in results if "error" in r])
-            print(f"        [{phone_no_prefix}] <- {eng_name}: {valid_count} risultati, {err_count} errori", flush=True)
+            errs = [r for r in results if "error" in r]
+            if errs:
+                for e in errs:
+                    print(f"        [{phone_no_prefix}] <- {eng_name}: ERRORE -> {e['error']}", flush=True)
+            else:
+                print(f"        [{phone_no_prefix}] <- {eng_name}: {valid_count} risultati OK", flush=True)
             for r in results:
                 r["query"] = query
             all_results.extend(results)
