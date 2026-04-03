@@ -20,8 +20,10 @@ import sys
 import time
 import urllib.parse
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
+from threading import Lock
 
 
 @dataclass
@@ -402,6 +404,12 @@ Esempi:
         default="numeri_trovati.txt",
         help="File TXT con i numeri trovati online (default: numeri_trovati.txt)",
     )
+    parser.add_argument(
+        "--workers", "-w",
+        type=int,
+        default=5,
+        help="Numero di ricerche in parallelo (default: 5)",
+    )
 
     args = parser.parse_args()
 
@@ -432,13 +440,13 @@ Esempi:
         contacts = contacts[: args.limit]
         print(f"Limitato a {len(contacts)} contatti.")
 
-    # Ricerca
-    search_results: list[SearchResult] = []
+    # Ricerca in parallelo
+    search_results: list[SearchResult] = [None] * len(contacts)  # type: ignore
     total = len(contacts)
+    print_lock = Lock()
+    completed = [0]  # contatore condiviso
 
-    for i, contact in enumerate(contacts, 1):
-        print(f"\n[{i}/{total}] Ricerca: {contact.name} ({contact.phone})...", end="", flush=True)
-
+    def search_contact(index: int, contact: Contact) -> None:
         try:
             results = search_phone_number(contact.phone, delay=args.delay)
             valid = [r for r in results if "error" not in r]
@@ -450,12 +458,14 @@ Esempi:
                 results=results,
                 error=errors[0]["error"] if errors and not valid else "",
             )
-            search_results.append(sr)
+            search_results[index] = sr
 
-            if valid:
-                print(f" {len(valid)} risultati trovati")
-            else:
-                print(" nessun risultato")
+            with print_lock:
+                completed[0] += 1
+                if valid:
+                    print(f"\n  [{completed[0]}/{total}] {contact.name} ({contact.phone}): {len(valid)} risultati trovati", flush=True)
+                else:
+                    print(f"\n  [{completed[0]}/{total}] {contact.name} ({contact.phone}): nessun risultato", flush=True)
 
         except Exception as e:
             sr = SearchResult(
@@ -463,12 +473,21 @@ Esempi:
                 query=f'"{contact.phone}"',
                 error=str(e),
             )
-            search_results.append(sr)
-            print(f" ERRORE: {e}")
+            search_results[index] = sr
+            with print_lock:
+                completed[0] += 1
+                print(f"\n  [{completed[0]}/{total}] {contact.name} ({contact.phone}): ERRORE - {e}", flush=True)
 
-        # Pausa tra un contatto e l'altro
-        if i < total:
-            time.sleep(args.delay)
+    workers = min(args.workers, total)
+    print(f"\nRicerca in corso con {workers} thread paralleli...")
+
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        futures = {
+            executor.submit(search_contact, i, contact): contact
+            for i, contact in enumerate(contacts)
+        }
+        for future in as_completed(futures):
+            future.result()  # propaga eventuali eccezioni non gestite
 
     # Report
     print_report(search_results)
