@@ -344,7 +344,7 @@ def strip_prefix(phone: str) -> str:
 # Motori di ricerca
 # ---------------------------------------------------------------------------
 
-def _fetch_html(url: str, method: str = "GET", data: bytes = None, timeout: int = 15) -> str:
+def _fetch_html(url: str, method: str = "GET", data: bytes = None, timeout: int = 8) -> str:
     headers = {
         "User-Agent": get_random_ua(),
         "Accept-Language": "it-IT,it;q=0.9,en;q=0.8",
@@ -573,7 +573,11 @@ def search_phone_number(phone: str, cache: SearchCache = None, engines: list[str
     for i, eng_name in enumerate(active_engines):
         if eng_name in SEARCH_ENGINES:
             query = queries[i % len(queries)]
+            print(f"        [{phone_no_prefix}] -> {eng_name}: {query}", flush=True)
             results = SEARCH_ENGINES[eng_name](query)
+            valid_count = len([r for r in results if "error" not in r])
+            err_count = len([r for r in results if "error" in r])
+            print(f"        [{phone_no_prefix}] <- {eng_name}: {valid_count} risultati, {err_count} errori", flush=True)
             for r in results:
                 r["query"] = query
             all_results.extend(results)
@@ -581,6 +585,7 @@ def search_phone_number(phone: str, cache: SearchCache = None, engines: list[str
 
     # Cerca sui siti specifici (veloci, una richiesta ciascuno)
     for site_name, site_func in SPECIFIC_SITES.items():
+        print(f"        [{phone_no_prefix}] -> {site_name}", flush=True)
         results = site_func(phone_no_prefix)
         for r in results:
             r["query"] = phone_no_prefix
