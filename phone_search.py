@@ -131,22 +131,23 @@ def load_contacts(filepath: str) -> list[Contact]:
 # Ricerca online
 # ---------------------------------------------------------------------------
 
-def search_duckduckgo_html(query: str, timeout: int = 15) -> list[dict]:
+def search_google_html(query: str, timeout: int = 15) -> list[dict]:
     """
-    Cerca su DuckDuckGo HTML version (lite) e restituisce i risultati trovati.
+    Cerca su Google e restituisce i risultati trovati.
     Non richiede API key.
     """
-    url = "https://html.duckduckgo.com/html/"
-    data = urllib.parse.urlencode({"q": query}).encode("utf-8")
+    encoded_query = urllib.parse.quote_plus(query)
+    url = f"https://www.google.com/search?q={encoded_query}&num=10&hl=it"
 
     req = urllib.request.Request(
         url,
-        data=data,
         headers={
-            "User-Agent": "Mozilla/5.0 (compatible; PhoneSearchTool/1.0)",
-            "Content-Type": "application/x-www-form-urlencoded",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                          "AppleWebKit/537.36 (KHTML, like Gecko) "
+                          "Chrome/120.0.0.0 Safari/537.36",
+            "Accept-Language": "it-IT,it;q=0.9,en;q=0.8",
+            "Accept": "text/html,application/xhtml+xml",
         },
-        method="POST",
     )
 
     try:
@@ -155,67 +156,109 @@ def search_duckduckgo_html(query: str, timeout: int = 15) -> list[dict]:
     except Exception as e:
         return [{"error": str(e)}]
 
-    # Parsing basilare dei risultati HTML di DuckDuckGo
     results = []
-    # I risultati sono in <a class="result__a" href="...">titolo</a>
-    # e snippet in <a class="result__snippet">...</a>
+
+    # Pattern per i link dei risultati Google
+    # Google usa <a href="/url?q=URL_REALE&...">
     link_pattern = re.compile(
-        r'class="result__a"[^>]*href="([^"]*)"[^>]*>(.*?)</a>',
+        r'<a[^>]+href="/url\?q=([^"&]+)[^"]*"[^>]*>(.*?)</a>',
         re.DOTALL,
     )
+    # Pattern alternativo per risultati diretti
+    link_pattern2 = re.compile(
+        r'<a[^>]+href="(https?://(?!google\.com|accounts\.google)[^"]+)"[^>]*>(.*?)</a>',
+        re.DOTALL,
+    )
+
+    # Cerca snippet nei tag <span> vicini ai risultati
     snippet_pattern = re.compile(
-        r'class="result__snippet"[^>]*>(.*?)</(?:a|td)',
+        r'<span[^>]*class="[^"]*"[^>]*>((?:(?!<span).){50,300})</span>',
         re.DOTALL,
     )
 
-    links = link_pattern.findall(html)
+    seen_urls = set()
+
+    for pattern in [link_pattern, link_pattern2]:
+        for href, title in pattern.findall(html):
+            href = urllib.parse.unquote(href)
+            # Filtra link interni di Google
+            if any(x in href for x in [
+                "google.com", "accounts.google", "support.google",
+                "maps.google", "policies.google", "webcache",
+            ]):
+                continue
+            if href in seen_urls:
+                continue
+            seen_urls.add(href)
+
+            title_clean = re.sub(r"<[^>]+>", "", title).strip()
+            if not title_clean or len(title_clean) < 3:
+                continue
+
+            results.append({
+                "title": title_clean,
+                "url": href,
+                "snippet": "",
+            })
+
+    # Aggiungi snippet ai risultati
     snippets = snippet_pattern.findall(html)
-
-    for i, (href, title) in enumerate(links):
-        title_clean = re.sub(r"<[^>]+>", "", title).strip()
-        snippet = ""
-        if i < len(snippets):
-            snippet = re.sub(r"<[^>]+>", "", snippets[i]).strip()
-
-        # Decodifica URL redirect di DuckDuckGo
-        if "uddg=" in href:
-            match = re.search(r"uddg=([^&]+)", href)
-            if match:
-                href = urllib.parse.unquote(match.group(1))
-
-        results.append({
-            "title": title_clean,
-            "url": href,
-            "snippet": snippet,
-        })
+    snippet_texts = [
+        re.sub(r"<[^>]+>", "", s).strip()
+        for s in snippets
+        if len(re.sub(r"<[^>]+>", "", s).strip()) > 40
+    ]
+    for i, r in enumerate(results):
+        if i < len(snippet_texts):
+            r["snippet"] = snippet_texts[i]
 
     return results
 
 
+def strip_prefix(phone: str) -> str:
+    """Rimuove il prefisso internazionale (+39) dal numero."""
+    if phone.startswith("+39"):
+        return phone[3:]
+    if phone.startswith("0039"):
+        return phone[4:]
+    return phone
+
+
 def search_phone_number(phone: str, delay: float = 2.0) -> list[dict]:
-    """Cerca un numero di telefono online con diverse query."""
+    """Cerca un numero di telefono su Google: con prefisso e senza."""
     all_results = []
 
-    # Query 1: numero esatto tra virgolette
-    query = f'"{phone}"'
-    results = search_duckduckgo_html(query)
-    for r in results:
-        r["query"] = query
-    all_results.extend(results)
+    # Query 1: numero completo con prefisso
+    query1 = f'"{phone}"'
+    print(f"\n      Ricerca Google: {query1}", end="", flush=True)
+    results1 = search_google_html(query1)
+    for r in results1:
+        r["query"] = query1
+    all_results.extend(results1)
 
     time.sleep(delay)
 
-    # Query 2: numero con spazi (formato comune italiano)
-    if len(phone) >= 10:
-        spaced = phone
-        if phone.startswith("+"):
-            # es. +39 333 1234567 -> cerca anche con spazi
-            spaced = phone[:3] + " " + phone[3:6] + " " + phone[6:]
-        query2 = f'"{spaced}"'
-        results2 = search_duckduckgo_html(query2)
+    # Query 2: numero senza prefisso internazionale
+    phone_no_prefix = strip_prefix(phone)
+    if phone_no_prefix != phone:
+        query2 = f'"{phone_no_prefix}"'
+        print(f"\n      Ricerca Google: {query2}", end="", flush=True)
+        results2 = search_google_html(query2)
         for r in results2:
             r["query"] = query2
         all_results.extend(results2)
+
+        time.sleep(delay)
+
+    # Query 3: numero con spazi (formato comune)
+    if len(phone_no_prefix) >= 9:
+        spaced = phone_no_prefix[:3] + " " + phone_no_prefix[3:6] + " " + phone_no_prefix[6:]
+        query3 = f'"{spaced}"'
+        print(f"\n      Ricerca Google: {query3}", end="", flush=True)
+        results3 = search_google_html(query3)
+        for r in results3:
+            r["query"] = query3
+        all_results.extend(results3)
 
     return all_results
 
@@ -291,6 +334,33 @@ def save_json_report(search_results: list[SearchResult], output_path: str):
     print(f"\nReport JSON salvato in: {output_path}")
 
 
+def save_found_numbers(search_results: list[SearchResult], output_path: str):
+    """Salva un file TXT con i numeri che hanno avuto risultati positivi."""
+    found = []
+    for sr in search_results:
+        valid_results = [r for r in sr.results if "error" not in r]
+        if valid_results:
+            found.append(sr)
+
+    with open(output_path, "w", encoding="utf-8") as f:
+        f.write("NUMERI TROVATI ONLINE\n")
+        f.write(f"Data: {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
+        f.write(f"Totale: {len(found)} numeri con risultati positivi\n")
+        f.write("=" * 60 + "\n\n")
+
+        for sr in found:
+            valid_results = [r for r in sr.results if "error" not in r]
+            f.write(f"Nome: {sr.contact.name}\n")
+            f.write(f"Numero: {sr.contact.phone}\n")
+            f.write(f"Risultati: {len(valid_results)}\n")
+            for i, r in enumerate(valid_results[:5], 1):
+                f.write(f"  [{i}] {r.get('title', 'N/A')}\n")
+                f.write(f"      {r.get('url', 'N/A')}\n")
+            f.write("-" * 60 + "\n\n")
+
+    print(f"File numeri trovati salvato in: {output_path}")
+
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
@@ -326,6 +396,11 @@ Esempi:
         type=int,
         default=0,
         help="Limita il numero di contatti da cercare (0 = tutti)",
+    )
+    parser.add_argument(
+        "--found", "-f",
+        default="numeri_trovati.txt",
+        help="File TXT con i numeri trovati online (default: numeri_trovati.txt)",
     )
 
     args = parser.parse_args()
@@ -397,6 +472,9 @@ Esempi:
 
     # Report
     print_report(search_results)
+
+    # Salva file TXT con numeri trovati
+    save_found_numbers(search_results, args.found)
 
     if args.output:
         save_json_report(search_results, args.output)
