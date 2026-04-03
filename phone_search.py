@@ -558,8 +558,10 @@ def search_phone_number(phone: str, cache: SearchCache = None, engines: list[str
 
     all_results = []
     phone_no_prefix = strip_prefix(phone)
+    active_engines = engines or list(SEARCH_ENGINES.keys())
 
-    # Query variants
+    # Strategia: distribuisci le query tra i motori per ridurre le richieste
+    # Ogni motore cerca una variante diversa del numero
     queries = [f'"{phone}"']
     if phone_no_prefix != phone:
         queries.append(f'"{phone_no_prefix}"')
@@ -567,25 +569,22 @@ def search_phone_number(phone: str, cache: SearchCache = None, engines: list[str
         spaced = phone_no_prefix[:3] + " " + phone_no_prefix[3:6] + " " + phone_no_prefix[6:]
         queries.append(f'"{spaced}"')
 
-    active_engines = engines or list(SEARCH_ENGINES.keys())
+    # Assegna una query diversa a ciascun motore (round-robin)
+    for i, eng_name in enumerate(active_engines):
+        if eng_name in SEARCH_ENGINES:
+            query = queries[i % len(queries)]
+            results = SEARCH_ENGINES[eng_name](query)
+            for r in results:
+                r["query"] = query
+            all_results.extend(results)
+            rate_limiter.wait()
 
-    # Cerca sui motori generici
-    for query in queries:
-        for eng_name in active_engines:
-            if eng_name in SEARCH_ENGINES:
-                results = SEARCH_ENGINES[eng_name](query)
-                for r in results:
-                    r["query"] = query
-                all_results.extend(results)
-                rate_limiter.wait()
-
-    # Cerca sui siti specifici
+    # Cerca sui siti specifici (veloci, una richiesta ciascuno)
     for site_name, site_func in SPECIFIC_SITES.items():
         results = site_func(phone_no_prefix)
         for r in results:
             r["query"] = phone_no_prefix
         all_results.extend(results)
-        rate_limiter.wait()
 
     # Deduplica per URL
     seen = set()
@@ -1204,6 +1203,8 @@ Esempi:
             return
 
         try:
+            with print_lock:
+                print(f"  ... analizzando {contact.name} ({contact.phone})", flush=True)
             results = search_phone_number(contact.phone, cache=cache, engines=active_engines)
             valid = [r for r in results if "error" not in r]
             errors = [r for r in results if "error" in r]
