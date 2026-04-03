@@ -483,7 +483,7 @@ def search_duckduckgo(query: str) -> list[dict]:
     url = "https://html.duckduckgo.com/html/"
     data = urllib.parse.urlencode({"q": query}).encode("utf-8")
     try:
-        html = _fetch_html(url, method="POST", data=data)
+        html = _fetch_html(url, method="POST", data=data, timeout=15)
         rate_limiter.success()
     except Exception as e:
         rate_limiter.failure()
@@ -1298,10 +1298,15 @@ Esempi:
                 cat = r.get("category", "altro")
                 cats[cat] = cats.get(cat, 0) + 1
 
+            # Segna errore solo se TUTTI i motori hanno fallito
+            # (nessun motore ha risposto, neanche con 0 risultati)
+            all_failed = len(errors) > 0 and len(results) == len(errors)
+            error_msg = errors[0]["error"] if all_failed else ""
+
             sr = SearchResult(
                 contact=contact, query=f'"{contact.phone}"',
                 results=results,
-                error=errors[0]["error"] if errors and not valid else "",
+                error=error_msg,
                 categories=cats,
                 from_cache=bool(cache and cache.get(contact.phone) is not None),
             )
