@@ -354,10 +354,15 @@ def save_found_numbers(search_results: list[SearchResult], output_path: str):
             valid_results = [r for r in sr.results if "error" not in r]
             f.write(f"Nome: {sr.contact.name}\n")
             f.write(f"Numero: {sr.contact.phone}\n")
-            f.write(f"Risultati: {len(valid_results)}\n")
-            for i, r in enumerate(valid_results[:5], 1):
+            f.write(f"Risultati: {len(valid_results)}\n\n")
+            for i, r in enumerate(valid_results[:10], 1):
                 f.write(f"  [{i}] {r.get('title', 'N/A')}\n")
-                f.write(f"      {r.get('url', 'N/A')}\n")
+                f.write(f"      URL: {r.get('url', 'N/A')}\n")
+                if r.get("snippet"):
+                    f.write(f"      Dettagli: {r['snippet'][:200]}\n")
+                if r.get("query"):
+                    f.write(f"      Query: {r['query']}\n")
+                f.write("\n")
             f.write("-" * 60 + "\n\n")
 
     print(f"File numeri trovati salvato in: {output_path}")
@@ -464,6 +469,10 @@ Esempi:
                 completed[0] += 1
                 if valid:
                     print(f"\n  [{completed[0]}/{total}] {contact.name} ({contact.phone}): {len(valid)} risultati trovati", flush=True)
+                    for j, r in enumerate(valid[:3], 1):
+                        print(f"      [{j}] {r.get('url', 'N/A')}", flush=True)
+                    if len(valid) > 3:
+                        print(f"      ... e altri {len(valid) - 3} risultati", flush=True)
                 else:
                     print(f"\n  [{completed[0]}/{total}] {contact.name} ({contact.phone}): nessun risultato", flush=True)
 
